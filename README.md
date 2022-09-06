@@ -1,8 +1,8 @@
-# ext-v2-token
+## ext-v2-token
 
 Here is a quick guide for deploying ext-v2-token standard on Internet Computer.
 
-* 1. Setup and local deployment
+# 1. Setup and local deployment
 
 - yarn install
 - dfx start 
@@ -11,7 +11,7 @@ Here is a quick guide for deploying ext-v2-token standard on Internet Computer.
 
 Congrats! Now you've deployed backend canister locally and topped it up with some cycles. Take note of your canister ID.
 
-* 2. Minting locally
+# 2. Minting locally
 
 - open *mint_script.js*, you will need to edit some variables
 - *isLocal* switches between local and ic networks, should be set to true for local deployment
@@ -27,7 +27,7 @@ This is expected behavior as its referencing wrong url due to how local canister
 
 Given that thumbnails are saved on collection canister, this should work: http://127.0.0.1:8000/?canisterId=rrkah-fqaaa-aaaaa-aaaaq-cai&index=0&type=thumbnail
 
-3. Minting on IC
+# 3. Minting on IC
 
 Now that you tested local deployment, you can proceed with minting on IC.
 
