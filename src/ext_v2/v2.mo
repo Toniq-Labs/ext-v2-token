@@ -830,6 +830,7 @@ actor class EXTNFT(init_owner: Principal) = this {
     };
   };
   public shared(msg) func ext_saleEnd() : async Bool {
+     assert(_isAdmin(msg.caller));
     switch(data_saleCurrent) {
       case(?s){        
         if (_saleEnded()) {
