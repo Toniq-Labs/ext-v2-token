@@ -227,6 +227,7 @@ actor class EXTNFT(init_owner: Principal) = this {
     headers: [HeaderField];
     body: Blob;
     streaming_strategy: ?HttpStreamingStrategy;
+    upgrade : Bool;
   };
   type HttpRequest = {
     method : Text;
@@ -286,8 +287,10 @@ actor class EXTNFT(init_owner: Principal) = this {
   //CONFIG
   private stable var config_owner : Principal  = init_owner;
   private stable var config_admin : Principal  = config_owner;
-  private stable var config_royalty_address : AccountIdentifier = AID.fromPrincipal(config_owner, null);
-  private stable var config_royalty_fee : Nat64  = 3000;
+  // private stable var config_royalty_address : AccountIdentifier = AID.fromPrincipal(config_owner, null);
+  // private stable var config_royalty_fee : Nat64  = 3000;
+  private stable var config_royalty : [(AccountIdentifier, Nat64)] = [(AID.fromPrincipal(config_owner, null), 3000)];
+  private stable var config_initial_sale_royalty_address : AccountIdentifier = AID.fromPrincipal(config_owner, null);
   private stable var config_collection_name : Text  = "[PLEASE CHANGE]";
   private stable var config_collection_data : Text  = "{}";
   private stable var config_marketplace_open : Time  = 0;
@@ -316,9 +319,9 @@ actor class EXTNFT(init_owner: Principal) = this {
   let ENTREPOT_SALE_FEES_ADDRESS : AccountIdentifier = "b18587720a742b1975c700a3ca11014510baecc3b98b270b24aaa2971d5c35fa";
   let ENTREPOT_SALE_FEES_AMOUNT : Nat64 = 6000;
   let ENTREPOT_MARKETPLACE_FEES_ADDRESS : AccountIdentifier = "c7e461041c0c5800a56b64bb7cefc247abc0bbbb99bd46ff71c64e92d9f5c2f9";
-  let ENTREPOT_MARKETPLACE_FEES_AMOUNT : Nat64 = 2000;
-  let HTTP_NOT_FOUND : HttpResponse = {status_code = 404; headers = []; body = Blob.fromArray([]); streaming_strategy = null};
-  let HTTP_BAD_REQUEST : HttpResponse = {status_code = 400; headers = []; body = Blob.fromArray([]); streaming_strategy = null};
+  let ENTREPOT_MARKETPLACE_FEES_AMOUNT : Nat64 = 1000;
+  let HTTP_NOT_FOUND : HttpResponse = {status_code = 404; headers = []; body = Blob.fromArray([]); streaming_strategy = null; upgrade = false};
+  let HTTP_BAD_REQUEST : HttpResponse = {status_code = 400; headers = []; body = Blob.fromArray([]); streaming_strategy = null; upgrade = false};
   
   
   //Services
@@ -335,8 +338,8 @@ actor class EXTNFT(init_owner: Principal) = this {
     data_ownersTableState := Iter.toArray(_owners.entries());
     data_tokenListingTableState := Iter.toArray(_tokenListing.entries());
     data_assetsTableState := Iter.toArray(_assets.entries());
-    data_chunksTableState := Iter.toArray(_chunks.entries());
     data_assetCanistersTableState := Iter.toArray(_assetCanisters.entries());
+    data_chunksTableState := Iter.toArray(_chunks.entries());
     data_paymentSettlementsTableState := Iter.toArray(_paymentSettlements.entries());
     data_saleGroupsTableState := Iter.toArray(_saleGroups.entries());
     data_disbursementQueueState := Queue.toArray(_disbursements);
@@ -348,7 +351,6 @@ actor class EXTNFT(init_owner: Principal) = this {
     data_tokenMetadataTableState := [];
     data_ownersTableState := [];
     data_tokenListingTableState := [];
-    data_chunksTableState := [];
     data_assetsTableState := [];
     data_assetCanistersTableState := [];
     data_paymentSettlementsTableState := [];
@@ -553,10 +555,16 @@ actor class EXTNFT(init_owner: Principal) = this {
     assert(_isOwner(msg.caller) or _isAdmin(msg.caller));
     config_admin := p;
   };
-  public shared(msg) func ext_setRoyalty(address : AccountIdentifier, fee : Nat64) : async () {
+  public shared(msg) func ext_setRoyalty( request : [ (AccountIdentifier, Nat64)]) : async () {
     assert(_isAdmin(msg.caller));
-    config_royalty_address := address;
-    config_royalty_fee := fee;
+    config_royalty := request;
+    // config_royalty_address := address;
+    // config_royalty_fee := fee;
+  };
+  public shared(msg) func ext_setSaleRoyalty(address : AccountIdentifier)
+  {
+    assert(_isAdmin(msg.caller));
+    config_initial_sale_royalty_address := address;
   };
   public shared(msg) func ext_addAssetCanister() : async () {
     assert(_isAdmin(msg.caller));
@@ -771,8 +779,9 @@ actor class EXTNFT(init_owner: Principal) = this {
         var start = s.start;
         var end = s.end;
         var groups = s.groups;
-        var quantity = s.quantity;
         var remaining = s.remaining;
+        let seed: Blob = await Random.blob();
+        data_saleTokensForSale := shuffleTokens(seed, switch(_owners.get("0000")){ case(?t) t; case(_) []});
         switch(newAirdrop) {
           case(?ad){    
             if (ad.size() > 0) {
@@ -780,7 +789,6 @@ actor class EXTNFT(init_owner: Principal) = this {
               for(a in ad.vals()){
                 _transferTokenToUser(nextTokens(1)[0], a);
               };
-              quantity := data_saleTokensForSale.size();
             };
           };
           case(_){};
@@ -813,7 +821,7 @@ actor class EXTNFT(init_owner: Principal) = this {
           start = start;
           end = end;
           groups = groups;
-          quantity =  quantity;
+          quantity =  data_saleTokensForSale.size();
           remaining = remaining;
         };
         return true;
@@ -821,28 +829,52 @@ actor class EXTNFT(init_owner: Principal) = this {
       case(_) return false;
     };
   };
+  public shared(msg) func ext_saleEnd() : async Bool {
+    switch(data_saleCurrent) {
+      case(?s){        
+        if (_saleEnded()) {
+          if (data_saleTokensForSale.size() > 0){
+            switch(s.remaining) {
+              case(#burn) {
+                for(t in data_saleTokensForSale.vals()){
+                  _transferTokenToUser(t, "0000000000000000000000000000000000000000000000000000000000000001");
+                };
+              };
+              case(#send a) {
+                for(t in data_saleTokensForSale.vals()){
+                  _transferTokenToUser(t, a);
+                };
+              };
+              case(_){};
+            };
+          };
+          data_saleTokensForSale := [];
+          data_saleSoldTracker := [];
+          for(a in _saleGroups.entries()){
+            _saleGroups.delete(a.0);
+          };
+          data_saleCurrent := null;
+          return true;
+        } else {
+          return false;
+        };
+      };
+      case(_) return true;
+    };
+  };
+  public shared(msg) func ext_salePause() : async Bool {
+    assert(_isAdmin(msg.caller));
+    false;
+  };
+  public shared(msg) func ext_saleResume() : async Bool {
+    assert(_isAdmin(msg.caller));
+    false;
+  };
   public shared(msg) func ext_saleClose() : async Bool {
     assert(_isAdmin(msg.caller));
     switch(data_saleCurrent) {
       case(?s){        
-        if (Time.now() < s.start or _saleEnded()) {
-          if (Time.now() >= s.end){
-            if (data_saleTokensForSale.size() > 0){
-              switch(s.remaining) {
-                case(#burn) {
-                  for(t in data_saleTokensForSale.vals()){
-                    _transferTokenToUser(t, "0000");
-                  };
-                };
-                case(#send a) {
-                  for(t in data_saleTokensForSale.vals()){
-                    _transferTokenToUser(t, a);
-                  };
-                };
-                case(_){};
-              };
-            };
-          };
+        if (Time.now() < s.start) {
           data_saleTokensForSale := [];
           data_saleSoldTracker := [];
           for(a in _saleGroups.entries()){
@@ -966,7 +998,8 @@ actor class EXTNFT(init_owner: Principal) = this {
                   var fee : Nat64 = bal * ENTREPOT_SALE_FEES_AMOUNT / 100000; //Calculate entrepot fee and send
                   _addDisbursement((0, ENTREPOT_SALE_FEES_ADDRESS, settlement.subaccount, fee));
                   var rem : Nat64 = bal - fee : Nat64; //Remove fee from balance and send
-                  _addDisbursement((0, config_royalty_address, settlement.subaccount, rem));
+                  // _addDisbursement((0, config_royalty_address, settlement.subaccount, rem));
+                  _addDisbursement((0, config_initial_sale_royalty_address, settlement.subaccount, rem));
                   
                   //Track limits
                   switch(_saleGroups.get(paymentaddress)){
@@ -1034,7 +1067,7 @@ actor class EXTNFT(init_owner: Principal) = this {
     };
   };
   //HTTP Views
-  public query func http_request(request : HttpRequest) : async HttpResponse {
+  public func http_request_update(request : HttpRequest) : async HttpResponse {
     switch(_getParam(request.url, "tokenid")) {
       case (?tokenid) {
         switch(_getTokenIndex(tokenid)) {
@@ -1042,7 +1075,7 @@ actor class EXTNFT(init_owner: Principal) = this {
             switch(_getParam(request.url, "type")) {
               case(?t) {
                 if (t == "thumbnail") {
-                  return _ext_httpTokenThumbnail(index);
+                  return await _ext_httpTokenThumbnail(index);
                 };
               };
               case(_) {};
@@ -1060,7 +1093,62 @@ actor class EXTNFT(init_owner: Principal) = this {
         switch(_getParam(request.url, "type")) {
           case(?t) {
             if (t == "thumbnail") {
-              return _ext_httpTokenThumbnail(index);
+              return await _ext_httpTokenThumbnail(index);
+            };
+          };
+          case(_) {};
+        };
+        return _ext_httpToken(index);
+      };
+      case (_){};
+    };
+    switch(_getParam(request.url, "asset")) {
+      case (?ah) {
+        return _ext_httpAsset(ah)
+      };
+      case (_){};
+    };
+    return _ext_httpHome();
+  };
+  public query func http_request(request : HttpRequest) : async HttpResponse {
+    switch(_getParam(request.url, "tokenid")) {
+      case (?tokenid) {
+        switch(_getTokenIndex(tokenid)) {
+          case (?index) {
+            switch(_getParam(request.url, "type")) {
+              case(?t) {
+                if (t == "thumbnail") {
+                  return {
+                    status_code = 200;
+                    headers = [ ("content-type", "text/plain") ];
+                    body = "Error with proxy...";
+                    streaming_strategy = null;
+                    upgrade = true;
+                  }
+                };
+              };
+              case(_) {};
+            };
+            return _ext_httpToken(index);
+          };
+          case (_){};
+        };
+      };
+      case (_){};
+    };
+    switch(_getParam(request.url, "index")) {
+      case (?i) {
+        let index = _textToNat32(i);
+        switch(_getParam(request.url, "type")) {
+          case(?t) {
+            if (t == "thumbnail") {
+              return {
+                status_code = 200;
+                headers = [ ("content-type", "text/plain") ];
+                body = "Error with proxy...";
+                streaming_strategy = null;
+                upgrade = true;
+              }
             };
           };
           case(_) {};
@@ -1193,16 +1281,18 @@ actor class EXTNFT(init_owner: Principal) = this {
     return true;
   };
   func _salesFees() : [(AccountIdentifier, Nat64)] {
-    [
-      (config_royalty_address, config_royalty_fee),
-      (ENTREPOT_SALE_FEES_ADDRESS, ENTREPOT_SALE_FEES_AMOUNT),
-    ]
+    Array.append(config_royalty, [(ENTREPOT_SALE_FEES_ADDRESS, ENTREPOT_SALE_FEES_AMOUNT)]);
+    // [
+    //   (config_royalty_address, config_royalty_fee),
+    //   (ENTREPOT_SALE_FEES_ADDRESS, ENTREPOT_SALE_FEES_AMOUNT),
+    // ]
   };
   func _marketplaceFees() : [(AccountIdentifier, Nat64)] {
-    [
-      (config_royalty_address, config_royalty_fee),
-      (ENTREPOT_MARKETPLACE_FEES_ADDRESS, ENTREPOT_MARKETPLACE_FEES_AMOUNT),
-    ]
+    Array.append(config_royalty, [(ENTREPOT_SALE_FEES_ADDRESS, ENTREPOT_SALE_FEES_AMOUNT)]);
+    // [
+    //   (config_royalty_address, config_royalty_fee),
+    //   (ENTREPOT_MARKETPLACE_FEES_ADDRESS, ENTREPOT_MARKETPLACE_FEES_AMOUNT),
+    // ]
   };
   func _ext_httpHome() : HttpResponse {
     var soldValue : Nat = Nat64.toNat(Array.foldLeft<Transaction, Nat64>(data_transactions, 0, func (b : Nat64, a : Transaction) : Nat64 { b + a.price }));
@@ -1211,40 +1301,55 @@ actor class EXTNFT(init_owner: Principal) = this {
     } else {
       0;
     };
+    var sc : Text = "";
+    for(a in _assetCanisters.entries()) {
+  sc #= "https://"#Principal.toText(a.0)#".raw.ic0.app/: " # debug_show(a.1) # "/" # debug_show(MAX_CHUNK_STORAGE) # "\n";
+    };
     return {
       status_code = 200;
       headers = [("content-type", "text/plain")];
       body = Text.encodeUtf8 (
         config_collection_name # "\n" #
         "---\n" #
-        "Cycle Balance:                            ~" # debug_show(Cycles.balance()/1000000000000) # "T\n" #
-        "Minted NFTs:                              " # debug_show(data_internalNextTokenId) # "\n" #
-        "Assets:                                   " # debug_show(_assets.size()) # "\n" #
-        "Chunks:                                   " # debug_show(_chunks.size()) # "\n" #
-        "Storage:                                  " # debug_show(data_storedChunkSize) # "/" # debug_show(MAX_CHUNK_STORAGE) # "\n" #
-        "---\n" #
-        "Marketplace Listings:                     " # debug_show(_tokenListing.size()) # "\n" #
-        "Sold via Marketplace:                     " # debug_show(data_transactions.size()) # "\n" #
-        "Sold via Marketplace in ICP:              " # _displayICP(soldValue) # "\n" #
-        "Average Price ICP Via Marketplace:        " # _displayICP(avg) # "\n" #
-        "---\n" #
-        "Royalty Address:                          " # config_royalty_address # "\n" #
-        "Royalty Amount:                           " # debug_show(config_royalty_fee) # "\n" #
-        "---\n" #
-        "Admin:                                    " # debug_show(config_admin) # "\n" #
-        "Owner:                                    " # debug_show(config_owner) # "\n"
+        "Cycle Balance:                                    ~" # debug_show(Cycles.balance()/1000000000000) # "T\n" #
+        "Minted NFTs:                                      " # debug_show(data_internalNextTokenId) # "\n" #
+        "Assets:                                           " # debug_show(_assets.size()) # "\n" #
+        "---\n" #                                          
+        "Local Chunks:                                     " # debug_show(_chunks.size()) # "\n" #
+        "Local:                                            " # debug_show(data_storedChunkSize) # "/" # debug_show(MAX_CHUNK_STORAGE) # "\n" #
+        sc #                                               
+        "---\n" #                                          
+        "Marketplace Listings:                             " # debug_show(_tokenListing.size()) # "\n" #
+        "Sold via Marketplace:                             " # debug_show(data_transactions.size()) # "\n" #
+        "Sold via Marketplace in ICP:                      " # _displayICP(soldValue) # "\n" #
+        "Average Price ICP Via Marketplace:                " # _displayICP(avg) # "\n" #
+        "---\n" #                                          
+        "Royalty Address:                          "         # debug_show(Array.map<(AccountIdentifier, Nat64), AccountIdentifier> (config_royalty, func (cr : (AccountIdentifier, Nat64)) : AccountIdentifier {
+          return cr.0;
+        } )) # "\n" #
+        "Royalty Amount:                           "         # debug_show(Array.map<(AccountIdentifier, Nat64), Nat64> (config_royalty, func (cr : (AccountIdentifier, Nat64)) : Nat64 {
+          return cr.1;
+        } )) # "\n" #
+        "Sale Royalty Address: "                             # debug_show(config_initial_sale_royalty_address) #
+        "---\n" #                                          
+        "Admin:                                            " # debug_show(config_admin) # "\n" #
+        "Owner:                                            " # debug_show(config_owner) # "\n"
       );
       streaming_strategy = null;
+      upgrade = false;
     };
   };
-  func _ext_httpTokenThumbnail(token : TokenIndex) : HttpResponse {
-    switch(_tokenMetadata.get(token)){
+  func _extGetTokenMetadata(token : TokenIndex) : ?Metadata {
+    _tokenMetadata.get(token);
+  };
+  func _ext_httpTokenThumbnail(token : TokenIndex) : async HttpResponse {
+    switch(_extGetTokenMetadata(token)){
       case(?md) {
         switch(md){
           case(#fungible _) HTTP_NOT_FOUND;
           case(#nonfungible nmd) {
             if (nmd.thumbnail == "") return HTTP_NOT_FOUND;
-            _ext_httpAsset(nmd.thumbnail);
+            await _ext_httpAssetStream(nmd.thumbnail);
           };
         };
       };
@@ -1252,7 +1357,7 @@ actor class EXTNFT(init_owner: Principal) = this {
     };
   };
   func _ext_httpToken(token : TokenIndex) : HttpResponse {
-    switch(_tokenMetadata.get(token)){
+    switch(_extGetTokenMetadata(token)){
       case(?md) {
         switch(md){
           case(#fungible _) HTTP_NOT_FOUND;
@@ -1260,6 +1365,32 @@ actor class EXTNFT(init_owner: Principal) = this {
             if (nmd.asset == "") return HTTP_NOT_FOUND;
             _ext_httpAsset(nmd.asset);
           };
+        };
+      };
+      case(_) HTTP_NOT_FOUND;
+    };
+  };
+  func _ext_httpAssetStream(handle : AssetHandle) : async HttpResponse {
+    switch(_assets.get(handle)){
+      case(?asset){        
+        switch(asset.atype) {
+          case(#direct chunks) _ext_httpOutputAsset(handle, asset, chunks);
+          case(#canister a) {
+            let acService : EXTAssetService = actor(a.canister);
+            switch(await acService.getAssetChunk(a.id, 0)){
+              case(?(ctype, chunk, last)){
+                return {
+                  status_code = 200;
+                  headers = [("content-type", ctype), ("cache-control", "public, max-age=15552000")];
+                  body = chunk;
+                  streaming_strategy = null;
+                  upgrade = false;
+                };
+              };
+              case(_) HTTP_NOT_FOUND;
+            };
+          };
+          case(#other url) _ext_httpExternalDisplay(asset, url);
         };
       };
       case(_) HTTP_NOT_FOUND;
@@ -1284,6 +1415,7 @@ actor class EXTNFT(init_owner: Principal) = this {
         headers = [("content-type", "image/svg+xml")];
         body = Text.encodeUtf8 ("<svg width=\"1000\" height=\"1000\" xmlns=\"http://www.w3.org/2000/svg\"><image href=\""#url#"\" width=\"1000\" height=\"1000\"/></svg>");
         streaming_strategy = null;
+        upgrade = false;
       };
     };
     return {
@@ -1291,6 +1423,7 @@ actor class EXTNFT(init_owner: Principal) = this {
       headers = [("content-type", "text/html")];
       body = Text.encodeUtf8 ("<!DOCTYPE html><html><head><meta charset=\"UTF-8\" /><meta http-equiv=\"refresh\" content=\"0; URL="#url#"\" /></head><body></body></html>");
       streaming_strategy = null;
+      upgrade = false;
     };
   };
   func _ext_httpOutputAsset(handle : AssetHandle, asset : Asset, chunks : [ChunkId]) : HttpResponse {
@@ -1304,6 +1437,7 @@ actor class EXTNFT(init_owner: Principal) = this {
           token = Option.unwrap(token);
           callback = http_request_streaming_callback;
         });
+        upgrade = false;
       };
     } else {
       switch(_chunks.get(chunks[0])) {
@@ -1313,6 +1447,7 @@ actor class EXTNFT(init_owner: Principal) = this {
             headers = [("content-type", asset.ctype), ("cache-control", "public, max-age=15552000")];
             body = chunk;
             streaming_strategy = null;
+            upgrade = false;
           };
         };
         case(_) return HTTP_NOT_FOUND;
@@ -1611,7 +1746,7 @@ actor class EXTNFT(init_owner: Principal) = this {
   func _ext_internalMarketplaceListings() : [(TokenIndex, Listing, Metadata)] {
     var results : [(TokenIndex, Listing, Metadata)] = [];
     for(a in _tokenListing.entries()) {
-      results := Array.append(results, [(a.0, a.1, Option.unwrap(_tokenMetadata.get(a.0)))]);
+      results := Array.append(results, [(a.0, a.1, Option.unwrap(_extGetTokenMetadata(a.0)))]);
     };
     results;
   };
@@ -1620,7 +1755,7 @@ actor class EXTNFT(init_owner: Principal) = this {
 			return #err(#InvalidToken(token));
 		};
 		let tokenind = ExtCore.TokenIdentifier.getIndex(token);
-    switch (_tokenMetadata.get(tokenind)) {
+    switch (_extGetTokenMetadata(tokenind)) {
       case (?token_metadata) {
 				return #ok(token_metadata);
       };
@@ -1973,4 +2108,6 @@ actor class EXTNFT(init_owner: Principal) = this {
   public query func isHeartbeatRunning() : async Bool {
     data_internalRunHeartbeat;
   };
+
+ 
 }

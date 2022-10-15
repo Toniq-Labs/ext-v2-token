@@ -77,6 +77,27 @@ shared(msg) actor class EXTAsset() = this {
     };
     return true;
   };
+  public query func getAssetChunk(assetId : Nat32, index : Nat) : async ?(Text, Blob, Bool) {
+    switch(_assets.get(assetId)) {
+      case(?asset) {
+        if (asset.chunks.size() > index) {        
+          switch(_chunks.get(asset.chunks[index])){
+            case(?chunk) {              
+              var last : Bool = false;
+              if ((index+1) == asset.chunks.size()) {
+                last := true;
+              };
+              return ?(asset.ctype, chunk, last);
+            };
+            case(_) return null;
+          };
+        } else {
+          return null;
+        };
+      };
+      case(_) return null;
+    };
+  };
   
   //HTTP
   type HeaderField = (Text, Text);
