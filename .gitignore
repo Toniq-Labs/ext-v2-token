@@ -20,3 +20,4 @@ dist/
 src/data
 yarn.lock
 misc/
+data/

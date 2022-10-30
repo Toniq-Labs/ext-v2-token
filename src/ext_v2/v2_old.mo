@@ -80,8 +80,6 @@ actor class EXTNFT(init_owner: Principal) = this {
       name : Text;
       asset : Text;
       thumbnail : Text;
-      prerevealAsset : Text;
-      prerevealThumb : Text;
       metadata: ?MetadataContainer;
     };
   };
@@ -296,7 +294,7 @@ actor class EXTNFT(init_owner: Principal) = this {
   private stable var config_collection_name : Text  = "[PLEASE CHANGE]";
   private stable var config_collection_data : Text  = "{}";
   private stable var config_marketplace_open : Time  = 0;
-  private stable var config_reveal_time : Time  = 0;
+  
   private stable var config_canCreateAssetCanister : Bool  = true;
 
   //Non-stable
@@ -581,15 +579,6 @@ actor class EXTNFT(init_owner: Principal) = this {
     assert(_isAdmin(msg.caller));
     config_marketplace_open := mpo;
   };
-
-  public shared(msg) func ext_setRevealTime(t : Time) : async () {
-    assert(_isAdmin(msg.caller));
-    config_reveal_time := t;
-    for((a,s) in _assetCanisters.entries()){
-      var acService : EXTAssetService = actor(Principal.toText(a));
-      await acService.ext_setRevealTime(t);
-    };
-  };
   
   public query func ext_admin() : async Principal {
     config_admin;
@@ -634,7 +623,6 @@ actor class EXTNFT(init_owner: Principal) = this {
     #ok(data_supply);
   };
   public query func ext_metadata(token : TokenIdentifier) : async Result.Result<Metadata, CommonError> {
-    if (_isRevealed()== false) return #err(#Other("Not revealed yet"));
     _ext_internalMetadata(token);
   };
   public query func ext_expired() : async [(AccountIdentifier, SubAccount)] {
@@ -1079,16 +1067,6 @@ actor class EXTNFT(init_owner: Principal) = this {
       } catch e {};
     };
   };
-
-  private func _isRevealed() : Bool
-  {
-    if (Time.now() < config_reveal_time)
-    {
-      return false;
-    };
-    return true;
-  };
-
   //HTTP Views
   public func http_request_update(request : HttpRequest) : async HttpResponse {
     switch(_getParam(request.url, "tokenid")) {
@@ -1127,11 +1105,7 @@ actor class EXTNFT(init_owner: Principal) = this {
     };
     switch(_getParam(request.url, "asset")) {
       case (?ah) {
-        if (_isRevealed())
-        {
-          return _ext_httpAsset(ah)
-        };
-
+        return _ext_httpAsset(ah)
       };
       case (_){};
     };
@@ -1186,10 +1160,7 @@ actor class EXTNFT(init_owner: Principal) = this {
     };
     switch(_getParam(request.url, "asset")) {
       case (?ah) {
-        if (_isRevealed())
-        {
-          return _ext_httpAsset(ah)
-        };
+        return _ext_httpAsset(ah)
       };
       case (_){};
     };
@@ -1379,15 +1350,7 @@ actor class EXTNFT(init_owner: Principal) = this {
           case(#fungible _) HTTP_NOT_FOUND;
           case(#nonfungible nmd) {
             if (nmd.thumbnail == "") return HTTP_NOT_FOUND;
-            if (_isRevealed() == false)
-            {
-              await _ext_httpAssetStream(nmd.prerevealThumb);
-            }
-            else
-            {
-              await _ext_httpAssetStream(nmd.thumbnail);  
-            };
-            
+            await _ext_httpAssetStream(nmd.thumbnail);
           };
         };
       };
@@ -1401,15 +1364,7 @@ actor class EXTNFT(init_owner: Principal) = this {
           case(#fungible _) HTTP_NOT_FOUND;
           case(#nonfungible nmd) {
             if (nmd.asset == "") return HTTP_NOT_FOUND;
-            if (_isRevealed() == false)
-            {
-              _ext_httpAsset(nmd.prerevealAsset);
-            }
-            else
-            {
-              _ext_httpAsset(nmd.asset);
-            };
-            
+            _ext_httpAsset(nmd.asset);
           };
         };
       };
@@ -2102,7 +2057,6 @@ actor class EXTNFT(init_owner: Principal) = this {
     };
   };
   public query func metadata(token : TokenIdentifier) : async Result.Result<MetadataLegacy, CommonError> {
-    if (_isRevealed()== false) return #err(#Other("Not revealed yet"));
     switch(_ext_internalMetadata(token)){
       case(#ok a) {
         #ok(_convertToLegacyMetadata(a));

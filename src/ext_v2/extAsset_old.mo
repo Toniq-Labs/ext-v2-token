@@ -10,7 +10,6 @@ import Array "mo:base/Array";
 import Option "mo:base/Option";
 import Char "mo:base/Char";
 import ExtCore "../motoko/ext/Core";
-import Time "mo:base/Time";
 
 shared(msg) actor class EXTAsset() = this {
   
@@ -19,8 +18,6 @@ shared(msg) actor class EXTAsset() = this {
     filename : Text;
     chunks : [Nat32];
   };
-
-    type Time = Time.Time;
   
   //State work
   private stable var _assetsState : [(Nat32, Asset)] = [];
@@ -31,7 +28,6 @@ shared(msg) actor class EXTAsset() = this {
   private stable var _nextAssetId : Nat32 = 0;
   private stable var _nextChunkId : Nat32 = 0;
   private stable var _owner : Principal  = msg.caller;
-    private stable var config_reveal_time : Time  = 0;
   
   system func preupgrade() {
     _assetsState := Iter.toArray(_assets.entries());
@@ -40,11 +36,6 @@ shared(msg) actor class EXTAsset() = this {
   system func postupgrade() {
     _assetsState := [];
     _chunksState := [];
-  };
-
-  public shared(msg) func ext_setRevealTime(t : Time) : async () {
-    assert(msg.caller == _owner);
-    config_reveal_time := t;
   };
   
   //Stream
@@ -87,10 +78,6 @@ shared(msg) actor class EXTAsset() = this {
     return true;
   };
   public query func getAssetChunk(assetId : Nat32, index : Nat) : async ?(Text, Blob, Bool) {
-    if (_isRevealed()==false)
-    {
-      return null;
-    };
     switch(_assets.get(assetId)) {
       case(?asset) {
         if (asset.chunks.size() > index) {        
@@ -219,25 +206,7 @@ shared(msg) actor class EXTAsset() = this {
     });
     return t;
   };
-  private func _isRevealed() : Bool
-  {
-    if (Time.now() < config_reveal_time)
-    {
-      return false;
-    };
-    return true;
-  };
   private func _processFile(assetId : Nat32, asset : Asset) : HttpResponse {
-    if (_isRevealed()==false)
-    {
-        return {
-        status_code = 200;
-        headers = [ ("content-type", "text/plain") ];
-        body = "Stop snooping! xd";
-        streaming_strategy = null;
-      };
-    };
-
     if (asset.chunks.size() > 1 ) {
       let (payload, token) = _streamContent(assetId, asset, 0);
       return {
