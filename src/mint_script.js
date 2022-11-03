@@ -107,13 +107,18 @@ const removeFilenameExtension = (filename) => {
   return filename.split('.').slice(0, -1).join('.');
 };
 
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 (async () => {
 
-          // first we create required asset canisters - usually we use 800mb per asset canister, so for a collection of 1.5gb worth of assets this would be 2 asset canisters
-          await API.ext_addAssetCanister();
-          await API.ext_addAssetCanister();
-
           //loop through all assets, and call upload asset
+          const shuffleFromX = 3;
           var collLen = 1;
           var alreadyMinted = 0;
           var i = -1 + alreadyMinted;
@@ -144,11 +149,14 @@ const removeFilenameExtension = (filename) => {
               }
               
             ])
-
           }
 
+          let nonShuffle = toMint.slice(0, shuffleFromX);
+          let toShuffle = toMint.slice(shuffleFromX);
+          let finalToMint = nonShuffle.concat(shuffle(toShuffle));
+
           // mint in the end
-          await API.ext_mint(toMint);
+          await API.ext_mint(finalToMint);
 
         })();
 
