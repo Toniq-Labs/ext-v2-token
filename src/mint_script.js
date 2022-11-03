@@ -117,48 +117,41 @@ function shuffle(a) {
 
 (async () => {
 
-          //loop through all assets, and call upload asset
-          const shuffleFromX = 3;
-          var collLen = 1;
-          var alreadyMinted = 0;
-          var i = -1 + alreadyMinted;
-          var toMint = [];
-          while (++i < collLen)
-          {
-            var filename = "" + i + ".png";
-            var ahAsset = removeFilenameExtension(filename);
-            var ahThumb = ahAsset+"_thumbnail";
-            var asset = assetPathBase+filename;
-            var thumb = thumbsPathBase + removeFilenameExtension(filename) + ".jpg";
+  //loop through all assets, and call upload asset
+  var collLen = 1;
+  var alreadyMinted = 0;
+  var i = -1 + alreadyMinted;
+  var toMint = [];
+  while (++i < collLen)
+  {
+    var filename = "" + i + ".png";
+    var ahAsset = removeFilenameExtension(filename);
+    var ahThumb = ahAsset+"_thumbnail";
+    var asset = assetPathBase+filename;
+    var thumb = thumbsPathBase + removeFilenameExtension(filename) + ".jpg";
 
-            await uploadAsset(true, API, ahThumb, filename, thumb)  // upload thumbnail
-            
-            await uploadAsset(false, API, ahAsset, filename, asset); // upload image
-
-
-            // add asset handlers to toMint array
-            toMint.push([
-              "mintingAddress",
-              {
-                nonfungible : {
-                  name : ""+i+"_front",
-                  asset : ahAsset,
-                  thumbnail : ahThumb,
-                  metadata : []
-                }
-              }
-              
-            ])
-          }
-
-          let nonShuffle = toMint.slice(0, shuffleFromX);
-          let toShuffle = toMint.slice(shuffleFromX);
-          let finalToMint = nonShuffle.concat(shuffle(toShuffle));
-
-          // mint in the end
-          await API.ext_mint(finalToMint);
-
-        })();
-
+    await uploadAsset(true, API, ahThumb, filename, thumb)  // upload thumbnail
     
-    
+    await uploadAsset(false, API, ahAsset, filename, asset); // upload image
+
+
+    // add asset handlers to toMint array
+    toMint.push([
+      "mintingAddress",
+      {
+        nonfungible : {
+          name : ""+i+"_front",
+          asset : ahAsset,
+          thumbnail : ahThumb,
+          metadata : []
+        }
+      }
+      
+    ])
+
+  }
+
+  // mint in the end
+  await API.ext_mint(toMint);
+
+})();
