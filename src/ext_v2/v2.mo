@@ -854,7 +854,7 @@ actor class EXTNFT(init_owner: Principal) = this {
   };
   public shared(msg) func ext_saleAddAirdrop(ad : [AccountIdentifier]) : async Bool 
   {
-    //  assert(_isAdmin(msg.caller));
+     assert(_isAdmin(msg.caller));
     switch(data_saleCurrent) {
       case(?s) {
           let seed: Blob = await Random.blob();
@@ -873,7 +873,7 @@ actor class EXTNFT(init_owner: Principal) = this {
   };
   public shared(msg) func ext_saleAddWhitelistAddresses(name : Text, whitelistAdditions : [AccountIdentifier]) : async Bool 
   {
-  //  assert(_isAdmin(msg.caller));
+   assert(_isAdmin(msg.caller));
    let group : ?SalePricingGroup = _getGroupByName(name);
    switch(group)
    {
@@ -924,7 +924,7 @@ actor class EXTNFT(init_owner: Principal) = this {
 };
 public shared(msg) func ext_saleModifyGroupPricing(name : Text, newpricing : [(Nat64, Nat64)] ) : async Bool 
 {
-  //  assert(_isAdmin(msg.caller));
+   assert(_isAdmin(msg.caller));
    let group : ?SalePricingGroup = _getGroupByName(name);
    switch(group)
    {
@@ -976,7 +976,7 @@ public shared(msg) func ext_saleModifyGroupPricing(name : Text, newpricing : [(N
   };
 public shared(msg) func ext_saleModifyGroupTimes(name : Text, newStart : Time, newEnd : Time ) : async Bool 
 {
-  //  assert(_isAdmin(msg.caller));
+   assert(_isAdmin(msg.caller));
    let group : ?SalePricingGroup = _getGroupByName(name);
    switch(group)
    {
