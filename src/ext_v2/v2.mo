@@ -1,3 +1,5 @@
+// Downgrade http request 
+
 import Cycles "mo:base/ExperimentalCycles";
 import HashMap "mo:base/HashMap";
 import Nat64 "mo:base/Nat64";
@@ -829,216 +831,8 @@ actor class EXTNFT(init_owner: Principal) = this {
       case(_) return false;
     };
   };
-
-  func _getGroupByName(name:Text) : ?SalePricingGroup
-  {
-    switch(data_saleCurrent)
-    {
-      case(?s)
-      {
-        let groups = s.groups;
-        for(a in groups.vals()){
-           if (name == a.name)
-           {
-            return ?a;
-           };
-           return null;
-          };
-        return null;
-      };
-      case(_)
-      {
-        return null;
-      };
-    }
-  };
-  public shared(msg) func ext_saleAddAirdrop(ad : [AccountIdentifier]) : async Bool 
-  {
-     assert(_isAdmin(msg.caller));
-    switch(data_saleCurrent) {
-      case(?s) {
-          let seed: Blob = await Random.blob();
-          data_saleTokensForSale := shuffleTokens(seed, switch(_owners.get("0000")){ case(?t) t; case(_) []});
-          if (ad.size() > 0) {
-            if (ad.size() > data_saleTokensForSale.size()) return false;
-            for(a in ad.vals()){
-              _transferTokenToUser(nextTokens(1)[0], a);
-            };
-            return true;
-          };
-          return false;
-        };
-        case(_) return false;
-      };
-  };
-  public shared(msg) func ext_saleAddWhitelistAddresses(name : Text, whitelistAdditions : [AccountIdentifier]) : async Bool 
-  {
-   assert(_isAdmin(msg.caller));
-   let group : ?SalePricingGroup = _getGroupByName(name);
-   switch(group)
-   {
-    case(?g)
-    {
-      switch (data_saleCurrent)
-      {
-        case (?saleCurrent)
-        {
-          let existingGroups = saleCurrent.groups;
-          var newGroups : [SalePricingGroup] = [];
-          for(a in existingGroups.vals()){
-           if (name == a.name)
-           {
-            var newPart = Array.append(a.participants,whitelistAdditions);
-            newGroups := Array.append(newGroups, [
-              {
-                name = a.name;
-                limit = a.limit;
-                start = a.start;
-                end = a.end;
-                pricing = a.pricing;
-                participants = newPart;
-              }
-            ]);
-           }
-           else
-           {
-            newGroups := Array.append(newGroups, [a]);
-           };
-          };
-          let data_saleUpdated = {
-            start = saleCurrent.start;
-            end = saleCurrent.end;
-            quantity = saleCurrent.quantity;
-            remaining = saleCurrent.remaining;
-            groups = newGroups;
-          };
-          data_saleCurrent := ?data_saleUpdated;
-        };
-        case(_) return false;
-      };
-      return true;
-    };
-    case(_) return false;
-   };
-   return true;
-};
-public shared(msg) func ext_saleModifyGroupPricing(name : Text, newpricing : [(Nat64, Nat64)] ) : async Bool 
-{
-   assert(_isAdmin(msg.caller));
-   let group : ?SalePricingGroup = _getGroupByName(name);
-   switch(group)
-   {
-    case(?g)
-    {
-      switch (data_saleCurrent)
-      {
-        case (?saleCurrent)
-        {
-          let existingGroups = saleCurrent.groups;
-          var newGroups : [SalePricingGroup] = [];
-          for(a in existingGroups.vals()){
-           if (name == a.name)
-           {
-            newGroups := Array.append(newGroups, [
-              {
-                name = a.name;
-                limit = a.limit;
-                start = a.start;
-                end = a.end;
-                pricing = newpricing;
-                participants = a.participants;
-              }
-            ]);
-           }
-           else
-           {
-            newGroups := Array.append(newGroups, [a]);
-           };
-          };
-
-          let data_saleUpdated = {
-            start = saleCurrent.start;
-            end = saleCurrent.end;
-            quantity = saleCurrent.quantity;
-            remaining = saleCurrent.remaining;
-            groups = newGroups;
-          };
-          data_saleCurrent := ?data_saleUpdated;
-        };
-        case(_) return false;
-      };
-      return true;
-    };
-    case(_) return false;
-   };
-
-   return true;
-  };
-public shared(msg) func ext_saleModifyGroupTimes(name : Text, newStart : Time, newEnd : Time ) : async Bool 
-{
-   assert(_isAdmin(msg.caller));
-   let group : ?SalePricingGroup = _getGroupByName(name);
-   switch(group)
-   {
-    case(?g)
-    {
-      switch (data_saleCurrent)
-      {
-        case (?saleCurrent)
-        {
-          let existingGroups = saleCurrent.groups;
-          var newGroups : [SalePricingGroup] = [];
-          for(a in existingGroups.vals()){
-           if (name == a.name)
-           {
-            newGroups := Array.append(newGroups, [
-              {
-                name = a.name;
-                limit = a.limit;
-                start = newStart;
-                end = newEnd;
-                pricing = a.pricing;
-                participants = a.participants;
-              }
-            ]);
-           }
-           else
-           {
-            newGroups := Array.append(newGroups, [a]);
-           };
-          };
-
-          var startFinal : Time = 0;
-          var endFinal : Time = 0;
-          for(g in newGroups.vals()){
-            if (startFinal == 0 or g.start < startFinal) {
-              startFinal := g.start;
-            };
-            if (endFinal == 0 or g.end > endFinal) {
-              endFinal := g.end;
-            };
-          };
-
-          let data_saleUpdated = {
-            start = startFinal;
-            end = endFinal;
-            quantity = saleCurrent.quantity;
-            remaining = saleCurrent.remaining;
-            groups = newGroups;
-          };
-          data_saleCurrent := ?data_saleUpdated;
-        };
-        case(_) return false;
-      };
-      return true;
-    };
-    case(_) return false;
-   };
-
-   return true;
-  };
   public shared(msg) func ext_saleEnd() : async Bool {
-     assert(_isAdmin(msg.caller));
+    assert(_isAdmin(msg.caller));
     switch(data_saleCurrent) {
       case(?s){        
         if (_saleEnded()) {
@@ -1284,7 +1078,7 @@ public shared(msg) func ext_saleModifyGroupTimes(name : Text, newStart : Time, n
             switch(_getParam(request.url, "type")) {
               case(?t) {
                 if (t == "thumbnail") {
-                  return await _ext_httpTokenThumbnail(index);
+                  return _ext_httpTokenThumbnail(index);
                 };
               };
               case(_) {};
@@ -1302,7 +1096,7 @@ public shared(msg) func ext_saleModifyGroupTimes(name : Text, newStart : Time, n
         switch(_getParam(request.url, "type")) {
           case(?t) {
             if (t == "thumbnail") {
-              return await _ext_httpTokenThumbnail(index);
+              return _ext_httpTokenThumbnail(index);
             };
           };
           case(_) {};
@@ -1327,13 +1121,7 @@ public shared(msg) func ext_saleModifyGroupTimes(name : Text, newStart : Time, n
             switch(_getParam(request.url, "type")) {
               case(?t) {
                 if (t == "thumbnail") {
-                  return {
-                    status_code = 200;
-                    headers = [ ("content-type", "text/plain") ];
-                    body = "Error with proxy...";
-                    streaming_strategy = null;
-                    upgrade = true;
-                  }
+                    return _ext_httpTokenThumbnail(index);
                 };
               };
               case(_) {};
@@ -1551,14 +1339,14 @@ public shared(msg) func ext_saleModifyGroupTimes(name : Text, newStart : Time, n
   func _extGetTokenMetadata(token : TokenIndex) : ?Metadata {
     _tokenMetadata.get(token);
   };
-  func _ext_httpTokenThumbnail(token : TokenIndex) : async HttpResponse {
+  func _ext_httpTokenThumbnail(token : TokenIndex) : HttpResponse {
     switch(_extGetTokenMetadata(token)){
       case(?md) {
         switch(md){
           case(#fungible _) HTTP_NOT_FOUND;
           case(#nonfungible nmd) {
             if (nmd.thumbnail == "") return HTTP_NOT_FOUND;
-            await _ext_httpAssetStream(nmd.thumbnail);
+            _ext_httpAsset(nmd.thumbnail);
           };
         };
       };

@@ -130,9 +130,9 @@ function shuffle(a) {
     var asset = assetPathBase+filename;
     var thumb = thumbsPathBase + removeFilenameExtension(filename) + ".jpg";
 
-    await uploadAsset(true, API, ahThumb, filename, thumb)  // upload thumbnail
+    // await uploadAsset(true, API, ahThumb, filename, thumb)  // upload thumbnail
     
-    await uploadAsset(false, API, ahAsset, filename, asset); // upload image
+    // await uploadAsset(false, API, ahAsset, filename, asset); // upload image
 
 
     // add asset handlers to toMint array
