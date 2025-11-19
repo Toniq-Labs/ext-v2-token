@@ -30,15 +30,12 @@ Early EXT NFT canisters have different implementations due to launches before st
 const ICP_LEDGER = 'ryjl3-tyaaa-aaaaa-aaaba-cai';
 
 const PRINCIPAL_ONLY = [
-    'qcg3w-tyaaa-aaaah-qakea-cai',  // ICPunks
-    '4nvhy-3qaaa-aaaah-qcnoq-cai',  // ICPuppies
-    'jzg5e-giaaa-aaaah-qaqda-cai',  // Motoko Day Drop
-    'd3ttm-qaaaa-aaaai-qam4a-cai',  // Poked Bots
-    'xkbqi-2qaaa-aaaah-qbpqq-cai',  // IC Drip
+    'jzg5e-giaaa-aaaah-qaqda-cai',
+    'xkbqi-2qaaa-aaaah-qbpqq-cai',
 ];
 
-const DEPARTURE_LABS = 'fl5nr-xiaaa-aaaai-qbjmq-cai';
-const CRONIC = 'qz7gu-giaaa-aaaaf-qaaka-cai';
+const CUSTOM_TRANSFER_A = 'fl5nr-xiaaa-aaaai-qbjmq-cai';
+const CUSTOM_TRANSFER_B = 'qz7gu-giaaa-aaaaf-qaaka-cai';
 ```
 
 ### Complete Transfer Implementation
@@ -65,8 +62,8 @@ async function universalTransfer(canisterId, actor, tokenIndex, fromPrincipal, t
         return await actor.transfer_to(Principal.fromText(toUser), tokenIndex);
     }
 
-    // Departure Labs
-    if (canisterId === DEPARTURE_LABS) {
+    // Custom transfer A (transferFrom)
+    if (canisterId === CUSTOM_TRANSFER_A) {
         if (!validatePrincipal(toUser)) {
             throw new Error('Principal required');
         }
@@ -79,8 +76,8 @@ async function universalTransfer(canisterId, actor, tokenIndex, fromPrincipal, t
         return result;
     }
 
-    // Cronic
-    if (canisterId === CRONIC) {
+    // Custom transfer B
+    if (canisterId === CUSTOM_TRANSFER_B) {
         const result = await actor.transfer({
             to: Principal.fromText(toUser),
             metadata: [],
@@ -127,8 +124,8 @@ async function universalGetTokens(canisterId, actor, accountId, principal) {
         }));
     }
 
-    // Departure Labs
-    if (canisterId === DEPARTURE_LABS) {
+    // Custom enumeration (getAllNFT)
+    if (canisterId === CUSTOM_TRANSFER_A) {
         if (accountId !== principalToAccountIdentifier(principal, 0)) return [];
 
         const nfts = await actor.getAllNFT(Principal.fromText(principal));
@@ -225,7 +222,7 @@ ext_saleClose
 - [ ] Input validation (Principal vs AccountId)
 
 ### Should Have
-- [ ] Custom transfer methods (Departure Labs, Cronic)
+- [ ] Custom transfer methods (transferFrom, custom signatures)
 - [ ] Multiple metadata formats
 - [ ] Client-side transaction filtering
 - [ ] Purchase → payment → settle flow
