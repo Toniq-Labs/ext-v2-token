@@ -2,6 +2,13 @@
 
 Here is a quick guide for deploying ext-v2-token standard on Internet Computer.
 
+## Documentation
+
+- **[API Reference](./API-REFERENCE.md)** - Complete API documentation for all EXT v2 methods
+- **[Legacy Support Guide](./LEGACY-SUPPORT.md)** - Non-standard implementations and compatibility for frontend/marketplace/wallet builders
+
+---
+
 # 1. Setup and local deployment
 
 - yarn install
@@ -38,6 +45,17 @@ Now that you tested local deployment, you can proceed with minting on IC.
 - run *node src/mint_script.js*
 
 Congratulations, your NFT's should now be deployed on IC network!
+
+---
+
+## Additional Resources
+
+- **[API Reference](./API-REFERENCE.md)** - Complete documentation of all available methods
+- **[Legacy Support Guide](./LEGACY-SUPPORT.md)** - Universal handlers for supporting multiple canister implementations
+
+**For Frontend/Marketplace/Wallet Developers:**
+- See [LEGACY-SUPPORT.md](./LEGACY-SUPPORT.md) for universal transfer and token enumeration handlers
+- Check [API-REFERENCE.md](./API-REFERENCE.md) for complete method signatures and examples
 
 
 
