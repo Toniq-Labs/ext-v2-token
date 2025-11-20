@@ -244,6 +244,59 @@ Wrapper transfers use the standard EXT path—no special handling required beyon
 
 ---
 
+## Marketplace Methods
+
+### Listings (EXT)
+
+```javascript
+async function listToken(canisterId, actor, tokenIndex, fromSubaccount, price) {
+    // Not supported on ICP Ledger or HZLD; use wrapped canisters for older collections
+    const args = {
+        token: encodeTokenId(canisterId, tokenIndex),
+        from_subaccount: [getSubAccountArray(fromSubaccount ?? 0)],
+        // empty Vec to delist
+        price: price === 0n ? [] : [BigInt(price)],
+    };
+    return await actor.list(args);
+}
+```
+
+- Use wrappers for legacy originals (ICPunks/ICats/IC Drip/ICTurtles/ICPBunny); originals generally do not expose `list`.
+- To delist, call with `price: []` (or `price === 0n` in helper above).
+- Listings surface in `tokens_ext` as the second tuple element.
+
+### Primary Sales (EXT2)
+
+```javascript
+async function purchaseFromSale(collectionActor, icpActor, priceGroupId, price, qty, buyerAccountId) {
+    // Step 1: Reserve and get payment address/amount
+    const reserve = await collectionActor.ext_salePurchase(priceGroupId, price, qty, buyerAccountId);
+    if ('err' in reserve) throw reserve.err;
+    const [payToAddress, priceToPay] = reserve.ok;
+
+    // Step 2: Pay via ICP ledger
+    await icpActor.send_dfx({
+        from_subaccount: [getSubAccountArray(0)],
+        to: payToAddress,
+        amount: { e8s: BigInt(priceToPay) },
+        fee: { e8s: 10_000n },
+        memo: 0n,
+        created_at_time: [],
+    });
+
+    // Step 3: Settle to complete transfer
+    const settled = await collectionActor.ext_saleSettle(payToAddress);
+    if ('err' in settled) throw settled.err;
+    return settled.ok;
+}
+```
+
+- Discover sale state with `ext_saleSettings(accountId)`; view history with `ext_saleTransactions()`.
+- `ext_salePurchase`/`ext_saleSettle` use account identifiers (not Principals); always send ICP before settling.
+- `ext_saleTransactions` is unfiltered—paginate client-side for large sales.
+
+---
+
 ## Transactions API
 
 **Important:** `transactions()` returns ALL collection transactions, not filtered by caller.
@@ -280,6 +333,13 @@ Tokens already exist before sale starts. User "minting" is actually purchasing/t
 - [ ] `tokens_ext()` enumeration with listing/metadata extraction
 - [ ] Input validation (Principal vs AccountId; reject mismatches early)
 - [ ] Wrapper canister detection (mark wrapped, map to original)
+
+### Should Have
+- [ ] Custom transfer methods (e.g., ICTurtles `transferFrom`, HZLD signature)
+- [ ] Multiple metadata formats (ext_metadata, legacy metadata, collection-level)
+- [ ] Client-side transaction filtering (caller-only views, pagination)
+- [ ] Purchase → payment → settle flow (mint server-side, sale wallet distribution)
+- [ ] Wrap/unwrap UI (detect wrappers, offer wrap/unwrap actions)
 
 
 ### Common Pitfalls
