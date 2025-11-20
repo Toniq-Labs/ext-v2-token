@@ -64,11 +64,11 @@ const WRAPPERS = {
 ```
 
 **Helper utilities assumed:**
-- `getSubAccountArray(index)` → 32-byte subaccount array
-- `principalToAccountIdentifier(principal, index)` → ICP account id
-- `constructUser(accountIdOrPrincipal)` → EXT `User` value
-- `validatePrincipal(text)` → boolean
-- `encodeTokenId(canisterId, tokenIndex)` → EXT token identifier
+- `getSubAccountArray(index)` → 32-byte subaccount array (`src/extjs/utils.js`)
+- `principalToAccountIdentifier(principal, index)` → ICP account id (`src/extjs/utils.js`)
+- `validatePrincipal(text)` → boolean (`src/extjs/utils.js`)
+- `constructUser(accountIdOrPrincipal)` → EXT `User` value (`src/extjs/extjs.js`)
+- `encodeTokenId(canisterId, tokenIndex)` → EXT token identifier (`src/extjs/extjs.js`)
 - `Principal` from `@dfinity/principal` is available in scope for examples
 
 ### Complete Transfer Implementation
