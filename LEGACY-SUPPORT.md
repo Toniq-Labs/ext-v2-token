@@ -23,11 +23,15 @@ Early EXT NFT canisters have different implementations due to launches before st
 async function resolveMetadata(actor, tokenId) {
     const ext = await actor.ext_metadata?.(tokenId).catch(() => null);
     if (ext) return ext;
+
     const legacy = await actor.metadata?.(tokenId).catch(() => null);
     if (legacy) return legacy;
+
     return (await actor.getMetadata?.().catch(() => null)) || null;
 }
 ```
+
+**Notes:** Generative collections return rich per-token metadata. Non-generative collections often return just the numeric index or `null`; handle both without failing the UI.
 
 ---
 
@@ -39,6 +43,9 @@ async function resolveMetadata(actor, tokenId) {
 const ICP_LEDGER = 'ryjl3-tyaaa-aaaaa-aaaba-cai';
 
 const PRINCIPAL_ONLY = [
+    'qcg3w-tyaaa-aaaah-qakea-cai', // ICPunks (original)
+    '4nvhy-3qaaa-aaaah-qcnoq-cai', // ICats (original)
+    'd3ttm-qaaaa-aaaai-qam4a-cai', // IC Drip (original)
     'jzg5e-giaaa-aaaah-qaqda-cai',
     'xkbqi-2qaaa-aaaah-qbpqq-cai',
 ];
@@ -62,6 +69,7 @@ const WRAPPERS = {
 - `constructUser(accountIdOrPrincipal)` → EXT `User` value
 - `validatePrincipal(text)` → boolean
 - `encodeTokenId(canisterId, tokenIndex)` → EXT token identifier
+- `Principal` from `@dfinity/principal` is available in scope for examples
 
 ### Complete Transfer Implementation
 
@@ -73,7 +81,7 @@ async function universalTransfer(canisterId, actor, tokenIndex, fromPrincipal, t
     if (canisterId === ICP_LEDGER) {
         return await actor.send_dfx({
             from_subaccount: [getSubAccountArray(0)],
-            to: toUser,
+            to: toUser, // account identifier string, not Principal
             amount: { e8s: amount64 },
             fee: { e8s: 10_000n },
             memo: 0n,
@@ -196,10 +204,10 @@ Wrappers make non-standard NFTs EXT-compatible. Original NFTs are held in escrow
 ### Wrap Process
 
 ```javascript
-async function wrapNFT(tokenId, wrapperCanister, userPrincipal) {
+async function wrapNFT(tokenId, wrapperCanister) {
     await wrapperActor.wrap(tokenId);  // Step 1: Prepare
-    await originalActor.transfer_to(Principal.fromText(wrapperCanister), tokenIndex);  // Step 2: Transfer
-    await wrapperActor.mint(tokenId);  // Step 3: Mint wrapped token
+    await originalActor.transfer_to(Principal.fromText(wrapperCanister), tokenId);  // Step 2: Transfer original
+    await wrapperActor.mint(tokenId);  // Step 3: Mint wrapped token to caller
 }
 ```
 
@@ -221,7 +229,18 @@ function isWrapper(canisterId) {
 function getOriginalCanister(wrapperCanisterId) {
     return WRAPPERS[wrapperCanisterId];
 }
+
+const displayTokens = tokens.map(token => ({
+    ...token,
+    wrapped: isWrapper(token.canister),
+    originalCanister: isWrapper(token.canister)
+        ? getOriginalCanister(token.canister)
+        : token.canister,
+    label: isWrapper(token.canister) ? 'Wrapped EXT' : 'Original',
+}));
 ```
+
+Wrapper transfers use the standard EXT path—no special handling required beyond detection and labeling.
 
 ---
 
@@ -235,6 +254,8 @@ const myTx = allTx.filter(tx =>
     tx.buyer === myAccountId || tx.seller === myAccountId
 );
 ```
+
+For large collections, paginate or chunk filtering client-side to avoid UI stalls when rendering histories.
 
 ---
 
@@ -252,20 +273,20 @@ Tokens already exist before sale starts. User "minting" is actually purchasing/t
 ## Implementation Checklist
 
 ### Must Have
-- [ ] Canister ID detection
-- [ ] Standard EXT transfer
-- [ ] Principal-only canister support
-- [ ] ICP Ledger support
-- [ ] `tokens_ext()` enumeration
-- [ ] Input validation (Principal vs AccountId)
-- [ ] Wrapper canister detection
+- [ ] Canister ID detection (route methods by canister)
+- [ ] Standard EXT transfer (encode tokenId, construct `User`, BigInt amounts)
+- [ ] Principal-only canister support (`transfer_to`, `user_tokens`)
+- [ ] ICP Ledger support (account identifier `to`, fee/memo as BigInt)
+- [ ] `tokens_ext()` enumeration with listing/metadata extraction
+- [ ] Input validation (Principal vs AccountId; reject mismatches early)
+- [ ] Wrapper canister detection (mark wrapped, map to original)
 
 ### Should Have
-- [ ] Custom transfer methods (transferFrom, custom signatures)
-- [ ] Multiple metadata formats
-- [ ] Client-side transaction filtering
-- [ ] Purchase → payment → settle flow
-- [ ] Wrap/unwrap UI
+- [ ] Custom transfer methods (e.g., ICTurtles `transferFrom`, HZLD signature)
+- [ ] Multiple metadata formats (ext_metadata, legacy metadata, collection-level)
+- [ ] Client-side transaction filtering (caller-only views, pagination)
+- [ ] Purchase → payment → settle flow (mint server-side, sale wallet distribution)
+- [ ] Wrap/unwrap UI (detect wrappers, offer wrap/unwrap actions)
 
 ### Common Pitfalls
 
