@@ -12,13 +12,22 @@ Early EXT NFT canisters have different implementations due to launches before st
 
 ## Metadata APIs
 
-**Three different methods exist:**
-
-- `getMetadata()` - Collection-level (often empty/nonexistent)
+**Three methods exist:**
+- `getMetadata()` - Collection-level (often empty)
 - `ext_metadata(tokenId)` - Standard per-token metadata
 - `metadata(tokenId)` - Legacy per-token metadata
 
-**Usage:** Generative collections (unique images per token) return meaningful per-token metadata. Non-generative collections typically just return the token index.
+**Resolution order:** Try `ext_metadata` → `metadata` → `getMetadata()`.
+
+```javascript
+async function resolveMetadata(actor, tokenId) {
+    const ext = await actor.ext_metadata?.(tokenId).catch(() => null);
+    if (ext) return ext;
+    const legacy = await actor.metadata?.(tokenId).catch(() => null);
+    if (legacy) return legacy;
+    return (await actor.getMetadata?.().catch(() => null)) || null;
+}
+```
 
 ---
 
@@ -34,22 +43,40 @@ const PRINCIPAL_ONLY = [
     'xkbqi-2qaaa-aaaah-qbpqq-cai',
 ];
 
-const CUSTOM_TRANSFER_A = 'fl5nr-xiaaa-aaaai-qbjmq-cai';
-const CUSTOM_TRANSFER_B = 'qz7gu-giaaa-aaaaf-qaaka-cai';
+const ICTURTLES = 'fl5nr-xiaaa-aaaai-qbjmq-cai';
+const HZLD = 'qz7gu-giaaa-aaaaf-qaaka-cai';
+
+// Wrapper canisters (wrapper → original mapping)
+const WRAPPERS = {
+    'bxdf4-baaaa-aaaah-qaruq-cai': 'qcg3w-tyaaa-aaaah-qakea-cai', // icpunks_wrapped
+    'y3b7h-siaaa-aaaah-qcnwa-cai': '4nvhy-3qaaa-aaaah-qcnoq-cai', // icats_wrapped
+    '3db6u-aiaaa-aaaah-qbjbq-cai': 'd3ttm-qaaaa-aaaai-qam4a-cai', // icdrip_wrapped
+    'jeghr-iaaaa-aaaah-qco7q-cai': 'fl5nr-xiaaa-aaaai-qbjmq-cai', // icturtles_wrapped
+    'q6hjz-kyaaa-aaaah-qcama-cai': 'xkbqi-2qaaa-aaaah-qbpqq-cai', // icpbunny_wrapped
+};
 ```
+
+**Helper utilities assumed:**
+- `getSubAccountArray(index)` → 32-byte subaccount array
+- `principalToAccountIdentifier(principal, index)` → ICP account id
+- `constructUser(accountIdOrPrincipal)` → EXT `User` value
+- `validatePrincipal(text)` → boolean
+- `encodeTokenId(canisterId, tokenIndex)` → EXT token identifier
 
 ### Complete Transfer Implementation
 
 ```javascript
 async function universalTransfer(canisterId, actor, tokenIndex, fromPrincipal, toUser, amount) {
+    const amount64 = typeof amount === 'bigint' ? amount : BigInt(amount);
+
     // ICP Ledger
     if (canisterId === ICP_LEDGER) {
         return await actor.send_dfx({
             from_subaccount: [getSubAccountArray(0)],
             to: toUser,
-            amount: { e8s: amount },
+            amount: { e8s: amount64 },
             fee: { e8s: 10_000n },
-            memo: 0,
+            memo: 0n,
             created_at_time: [],
         });
     }
@@ -62,8 +89,8 @@ async function universalTransfer(canisterId, actor, tokenIndex, fromPrincipal, t
         return await actor.transfer_to(Principal.fromText(toUser), tokenIndex);
     }
 
-    // Custom transfer A (transferFrom)
-    if (canisterId === CUSTOM_TRANSFER_A) {
+    // ICTurtles (transferFrom)
+    if (canisterId === ICTURTLES) {
         if (!validatePrincipal(toUser)) {
             throw new Error('Principal required');
         }
@@ -76,13 +103,13 @@ async function universalTransfer(canisterId, actor, tokenIndex, fromPrincipal, t
         return result;
     }
 
-    // Custom transfer B
-    if (canisterId === CUSTOM_TRANSFER_B) {
+    // HZLD
+    if (canisterId === HZLD) {
         const result = await actor.transfer({
             to: Principal.fromText(toUser),
             metadata: [],
             from: Principal.fromText(fromPrincipal),
-            amount: amount,
+            amount: amount64,
         });
         if (!('ok' in result)) throw new Error(JSON.stringify(result.err));
         return result;
@@ -94,7 +121,7 @@ async function universalTransfer(canisterId, actor, tokenIndex, fromPrincipal, t
         from: { address: principalToAccountIdentifier(fromPrincipal, 0) },
         subaccount: [getSubAccountArray(0)],
         to: constructUser(toUser),
-        amount: amount,
+        amount: amount64,
         fee: 0n,
         memo: new Uint8Array(),
         notify: false,
@@ -107,8 +134,6 @@ async function universalTransfer(canisterId, actor, tokenIndex, fromPrincipal, t
 ---
 
 ## Token Enumeration
-
-### Complete Token Enumeration Implementation
 
 ```javascript
 async function universalGetTokens(canisterId, actor, accountId, principal) {
@@ -124,8 +149,8 @@ async function universalGetTokens(canisterId, actor, accountId, principal) {
         }));
     }
 
-    // Custom enumeration (getAllNFT)
-    if (canisterId === CUSTOM_TRANSFER_A) {
+    // ICTurtles (getAllNFT)
+    if (canisterId === ICTURTLES) {
         if (accountId !== principalToAccountIdentifier(principal, 0)) return [];
 
         const nfts = await actor.getAllNFT(Principal.fromText(principal));
@@ -152,25 +177,57 @@ async function universalGetTokens(canisterId, actor, accountId, principal) {
 }
 ```
 
-**⚠️ Warning:** Never use `getTokens()` - it returns ALL tokens in the collection, causing performance issues.
+**⚠️ Warning:** Never use `getTokens()` - it returns ALL tokens, causing performance issues.
+
+---
+
+## Wrapped Canisters
+
+Wrappers make non-standard NFTs EXT-compatible. Original NFTs are held in escrow while wrapped versions use standard EXT interface.
+
+| Original Canister | Wrapped Canister | Collection |
+|-------------------|------------------|------------|
+| `qcg3w-tyaaa-aaaah-qakea-cai` | `bxdf4-baaaa-aaaah-qaruq-cai` | ICPunks |
+| `4nvhy-3qaaa-aaaah-qcnoq-cai` | `y3b7h-siaaa-aaaah-qcnwa-cai` | ICats |
+| `d3ttm-qaaaa-aaaai-qam4a-cai` | `3db6u-aiaaa-aaaah-qbjbq-cai` | IC Drip |
+| `fl5nr-xiaaa-aaaai-qbjmq-cai` | `jeghr-iaaaa-aaaah-qco7q-cai` | ICTurtles |
+| `xkbqi-2qaaa-aaaah-qbpqq-cai` | `q6hjz-kyaaa-aaaah-qcama-cai` | ICPBunny |
+
+### Wrap Process
+
+```javascript
+async function wrapNFT(tokenId, wrapperCanister, userPrincipal) {
+    await wrapperActor.wrap(tokenId);  // Step 1: Prepare
+    await originalActor.transfer_to(Principal.fromText(wrapperCanister), tokenIndex);  // Step 2: Transfer
+    await wrapperActor.mint(tokenId);  // Step 3: Mint wrapped token
+}
+```
+
+### Unwrap Process
+
+```javascript
+async function unwrapNFT(tokenId, subaccount) {
+    return await wrapperActor.unwrap(tokenId, [subaccount]);  // Returns original NFT
+}
+```
+
+### Detecting Wrapped Tokens
+
+```javascript
+function isWrapper(canisterId) {
+    return canisterId in WRAPPERS;
+}
+
+function getOriginalCanister(wrapperCanisterId) {
+    return WRAPPERS[wrapperCanisterId];
+}
+```
 
 ---
 
 ## Transactions API
 
-**Important:** `transactions()` returns **ALL** collection transactions, **not filtered by caller**.
-
-```javascript
-type Transaction = {
-    token: TokenIndex,
-    seller: AccountIdentifier,
-    buyer: AccountIdentifier,
-    price: nat64,
-    time: Time
-};
-```
-
-**You must filter client-side:**
+**Important:** `transactions()` returns ALL collection transactions, not filtered by caller.
 
 ```javascript
 const allTx = await actor.transactions();
@@ -183,31 +240,12 @@ const myTx = allTx.filter(tx =>
 
 ## Minting Workflow
 
-**Common Misconception:** `ext_mint` does NOT mean "users mint NFTs during sale."
+**`ext_mint` is server-side pre-allocation, NOT user minting.**
 
-### Actual Flow
+1. **Pre-Sale:** Admin calls `ext_mint` to allocate tokens to airdrop/sale addresses
+2. **During Sale:** Users call `ext_salePurchase` which transfers existing tokens
 
-1. **Pre-Sale (Server):** Admin calls `ext_mint` to pre-allocate tokens to:
-   - Airdrop addresses
-   - Sale address (holds tokens for purchase)
-
-2. **During Sale (Users):** Calling `ext_salePurchase` **transfers** an existing token from sale address to buyer
-
-**Key Point:** Tokens already exist before sale starts. User "minting" is actually purchasing/transferring.
-
-### Timeline Example
-
-```
-Deploy canister
-    ↓
-Server calls ext_mint (tokens 0-999 created)
-    ↓
-ext_saleOpen (sale starts)
-    ↓
-Users call ext_salePurchase (transfer from sale address)
-    ↓
-ext_saleClose
-```
+Tokens already exist before sale starts. User "minting" is actually purchasing/transferring.
 
 ---
 
@@ -220,19 +258,21 @@ ext_saleClose
 - [ ] ICP Ledger support
 - [ ] `tokens_ext()` enumeration
 - [ ] Input validation (Principal vs AccountId)
+- [ ] Wrapper canister detection
 
 ### Should Have
 - [ ] Custom transfer methods (transferFrom, custom signatures)
 - [ ] Multiple metadata formats
 - [ ] Client-side transaction filtering
 - [ ] Purchase → payment → settle flow
+- [ ] Wrap/unwrap UI
 
 ### Common Pitfalls
 
-⚠️ **Don't** assume AccountIdentifier support - check canister ID first
-⚠️ **Don't** use `getTokens()` - returns ALL tokens
-⚠️ **Don't** expect filtered transactions - `transactions()` returns everything
-⚠️ **Don't** confuse `ext_mint` - it's server-side pre-allocation, not user minting
+⚠️ Don't assume AccountIdentifier support - check canister ID first
+⚠️ Don't use `getTokens()` - returns ALL tokens
+⚠️ Don't expect filtered transactions - `transactions()` returns everything
+⚠️ Don't confuse `ext_mint` - it's server-side pre-allocation, not user minting
 
 ---
 
@@ -243,4 +283,4 @@ ext_saleClose
 
 ---
 
-**Last Updated:** 2025-11-19
+**Last Updated:** 2025-11-20
