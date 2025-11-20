@@ -246,7 +246,39 @@ Wrapper transfers use the standard EXT path—no special handling required beyon
 
 ## Marketplace Methods
 
-### Listings (EXT)
+### On-chain Marketplace (V2: `ext_marketplace*`)
+
+V2 collections expose `ext_marketplaceList`, `ext_marketplacePurchase`, and `ext_marketplaceSettle` for fully on-chain secondary trades (no external escrow).
+
+```javascript
+async function buyViaExtMarketplace(collectionActor, icpActor, tokenId, expectedPrice, buyerAccountId) {
+    // 1) Reserve & get payment address
+    const reserve = await collectionActor.ext_marketplacePurchase(tokenId, expectedPrice, buyerAccountId);
+    if ('err' in reserve) throw reserve.err;
+    const [payToAddress, priceToPay] = reserve.ok;
+
+    // 2) Send ICP to the returned address
+    await icpActor.send_dfx({
+        from_subaccount: [getSubAccountArray(0)],
+        to: payToAddress,
+        amount: { e8s: BigInt(priceToPay) },
+        fee: { e8s: 10_000n },
+        memo: 0n,
+        created_at_time: [],
+    });
+
+    // 3) Settle to transfer NFT and disburse proceeds
+    const settle = await collectionActor.ext_marketplaceSettle(payToAddress);
+    if ('err' in settle) throw settle.err;
+    return settle.ok;
+}
+```
+
+- `ext_marketplaceList` mirrors `list` for these collections; `ext_marketplaceListings` and `ext_marketplaceTransactions` expose current listings/history.
+- Always pay the returned address before calling `ext_marketplaceSettle`; settlements refund if the listing is gone/mismatched.
+- Use account identifiers (not Principals) for buyer/seller inputs.
+
+### Standard Listings (EXT)
 
 ```javascript
 async function listToken(canisterId, actor, tokenIndex, fromSubaccount, price) {
@@ -265,35 +297,14 @@ async function listToken(canisterId, actor, tokenIndex, fromSubaccount, price) {
 - To delist, call with `price: []` (or `price === 0n` in helper above).
 - Listings surface in `tokens_ext` as the second tuple element.
 
-### Primary Sales (EXT2)
+### Legacy Secondary Purchases (EXT v1-style)
 
-```javascript
-async function purchaseFromSale(collectionActor, icpActor, priceGroupId, price, qty, buyerAccountId) {
-    // Step 1: Reserve and get payment address/amount
-    const reserve = await collectionActor.ext_salePurchase(priceGroupId, price, qty, buyerAccountId);
-    if ('err' in reserve) throw reserve.err;
-    const [payToAddress, priceToPay] = reserve.ok;
+For collections without `ext_marketplace*` methods, EXT doesn't standardize a purchase call. A typical secondary flow is:
+- Read listings from `tokens_ext` (listing tuple element).
+- Handle payment via your marketplace escrow (e.g., ICP transfer to escrow).
+- Complete delivery with `transfer` from seller/escrow to buyer.
 
-    // Step 2: Pay via ICP ledger
-    await icpActor.send_dfx({
-        from_subaccount: [getSubAccountArray(0)],
-        to: payToAddress,
-        amount: { e8s: BigInt(priceToPay) },
-        fee: { e8s: 10_000n },
-        memo: 0n,
-        created_at_time: [],
-    });
-
-    // Step 3: Settle to complete transfer
-    const settled = await collectionActor.ext_saleSettle(payToAddress);
-    if ('err' in settled) throw settled.err;
-    return settled.ok;
-}
-```
-
-- Discover sale state with `ext_saleSettings(accountId)`; view history with `ext_saleTransactions()`.
-- `ext_salePurchase`/`ext_saleSettle` use account identifiers (not Principals); always send ICP before settling.
-- `ext_saleTransactions` is unfiltered—paginate client-side for large sales.
+Use `list`/`tokens_ext` for discovery; settlement steps vary by marketplace design.
 
 ---
 
@@ -338,7 +349,6 @@ Tokens already exist before sale starts. User "minting" is actually purchasing/t
 - [ ] Custom transfer methods (e.g., ICTurtles `transferFrom`, HZLD signature)
 - [ ] Multiple metadata formats (ext_metadata, legacy metadata, collection-level)
 - [ ] Client-side transaction filtering (caller-only views, pagination)
-- [ ] Purchase → payment → settle flow (mint server-side, sale wallet distribution)
 - [ ] Wrap/unwrap UI (detect wrappers, offer wrap/unwrap actions)
 
 
