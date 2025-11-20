@@ -281,12 +281,6 @@ Tokens already exist before sale starts. User "minting" is actually purchasing/t
 - [ ] Input validation (Principal vs AccountId; reject mismatches early)
 - [ ] Wrapper canister detection (mark wrapped, map to original)
 
-### Should Have
-- [ ] Custom transfer methods (e.g., ICTurtles `transferFrom`, HZLD signature)
-- [ ] Multiple metadata formats (ext_metadata, legacy metadata, collection-level)
-- [ ] Client-side transaction filtering (caller-only views, pagination)
-- [ ] Purchase → payment → settle flow (mint server-side, sale wallet distribution)
-- [ ] Wrap/unwrap UI (detect wrappers, offer wrap/unwrap actions)
 
 ### Common Pitfalls
 
