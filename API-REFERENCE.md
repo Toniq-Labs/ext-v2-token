@@ -204,7 +204,6 @@ const result = await actor.transfer(request);
 ```
 
 **Notes:**
-- `notify`: If true, calls recipient canister's `tokenTransferNotification`
 - Both methods are identical (ext_transfer is alias)
 - See [LEGACY-SUPPORT.md](./LEGACY-SUPPORT.md#transfer-methods) for non-standard implementations
 

@@ -57,7 +57,6 @@ const HZLD = 'qz7gu-giaaa-aaaaf-qaaka-cai';
 const WRAPPERS = {
     'bxdf4-baaaa-aaaah-qaruq-cai': 'qcg3w-tyaaa-aaaah-qakea-cai', // icpunks_wrapped
     'y3b7h-siaaa-aaaah-qcnwa-cai': '4nvhy-3qaaa-aaaah-qcnoq-cai', // icats_wrapped
-    '3db6u-aiaaa-aaaah-qbjbq-cai': 'd3ttm-qaaaa-aaaai-qam4a-cai', // icdrip_wrapped
     'jeghr-iaaaa-aaaah-qco7q-cai': 'fl5nr-xiaaa-aaaai-qbjmq-cai', // icturtles_wrapped
     'q6hjz-kyaaa-aaaah-qcama-cai': 'xkbqi-2qaaa-aaaah-qbpqq-cai', // icpbunny_wrapped
 };
@@ -197,7 +196,6 @@ Wrappers make non-standard NFTs EXT-compatible. Original NFTs are held in escrow
 |-------------------|------------------|------------|
 | `qcg3w-tyaaa-aaaah-qakea-cai` | `bxdf4-baaaa-aaaah-qaruq-cai` | ICPunks |
 | `4nvhy-3qaaa-aaaah-qcnoq-cai` | `y3b7h-siaaa-aaaah-qcnwa-cai` | ICats |
-| `d3ttm-qaaaa-aaaai-qam4a-cai` | `3db6u-aiaaa-aaaah-qbjbq-cai` | IC Drip |
 | `fl5nr-xiaaa-aaaai-qbjmq-cai` | `jeghr-iaaaa-aaaah-qco7q-cai` | ICTurtles |
 | `xkbqi-2qaaa-aaaah-qbpqq-cai` | `q6hjz-kyaaa-aaaah-qcama-cai` | ICPBunny |
 
